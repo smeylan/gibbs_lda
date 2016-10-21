@@ -268,125 +268,7 @@ def rewriteLine(str):
 	clear_output(wait=True)
 	print(str)
 	sys.stdout.flush()	
-
-
-def cleanInput(V, D, K, C, vocab_map, fwList, tolower=True, lemmatize=False, tokenLimit=2, docLimit=2, childLimit=None, corpusLimit=None):
 	
-	def n_unique(x):
-		return(len(np.unique(x)))
-		
-	corpDF = pandas.DataFrame([vocab_map[x] for x in V])
-	corpDF.columns = ['word']
-	corpDF.loc[:,'D'] = D
-	corpDF.loc[:,'C'] = C
-	corpDF.loc[:,'K'] = K
-	
-	if tolower:
-		# if true, all words converted to lower case
-		corpDF.loc[:,'word'] = [x.lower() for x in corpDF['word']]
-
-	if fwList is not None:
-		#if set, remove function words from the dataset
-		functionWords = pandas.read_csv(fwList)	
-		fwl = functionWords['word'].tolist()
-		corpDF.loc[:,'fw'] = [str(x) in fwl  for x in corpDF['word']] 
-		corpDF = corpDF.loc[~corpDF['fw']]	
-
-	if lemmatize:
-		#if true, all words lemmatized using the WordNet lemmatizer in NLTK
-		wnl = nltk.stem.WordNetLemmatizer()
-		corpDF.loc[:,'word'] = [wnl.lemmatize(x) for x in corpDF['word']]
-	
-	if tokenLimit is not None:
-		#if set, discard word types with fewer than tokenLimit instances in the corpus
-		tokenCounts = corpDF.groupby(corpDF['word'])['D'].agg(len).reset_index()
-		tokenCounts.columns = ['word','count']	
-		passingTokenFilter = tokenCounts[tokenCounts['count'] > tokenLimit]['word'].tolist()
-		corpDF = corpDF.loc[corpDF['word'].isin(passingTokenFilter)]	
-	
-
-	if docLimit is not None:	
-		#if set, remove words appearing in fewer than docLimit documents
-		
-		docCounts = corpDF.groupby(corpDF['word'])['D'].agg(n_unique).reset_index()
-		docCounts.columns = ['word','count']	
-		passingDocFilter = docCounts[docCounts['count'] > docLimit]['word'].tolist()
-		corpDF = corpDF.loc[corpDF['word'].isin(passingDocFilter),:]				
-	
-	if childLimit is not None:
-		#if set, remove words appeaning less than n times with m *children*. This is much more stringent than the docLimit approach
-		
-		childTokenCounts = corpDF.groupby([corpDF['K'], corpDF['word']])['D'].size().reset_index()
-		childTokenCounts.columns = ['K','word','count']
-		
-		childTokenCounts = childTokenCounts[childTokenCounts['count'] > childLimit['tokenThreshold']]
-		numberOfChildrenPassingFilter = childTokenCounts.groupby(childTokenCounts['word'])['K'].agg(n_unique).reset_index()
-		numberOfChildrenPassingFilter = numberOfChildrenPassingFilter[ numberOfChildrenPassingFilter['K'] > childLimit['childThreshold']]
-
-		corpDF = corpDF.loc[corpDF['word'].isin(numberOfChildrenPassingFilter.word),:]
-		
-	if corpusLimit is not None:
-		#if set, remove words appeaning less than n times with m *corpora*. This is much more stringent than the docLimit approach
-		
-		corpusTokenCounts = corpDF.groupby([corpDF['C'], corpDF['word']])['D'].size().reset_index()
-		corpusTokenCounts.columns = ['C','word','count']
-		
-		corpusTokenCounts = corpusTokenCounts[corpusTokenCounts['count'] > corpusLimit['tokenThreshold']]
-		numberOfCorporaPassingFilter = corpusTokenCounts.groupby(corpusTokenCounts['word'])['C'].agg(n_unique).reset_index()
-		numberOfCorporaPassingFilter = numberOfCorporaPassingFilter[numberOfCorporaPassingFilter['C'] > corpusLimit['corpusThreshold']]
-
-		corpDF = corpDF.loc[corpDF['word'].isin(numberOfCorporaPassingFilter.word),:]	
-
-	vocab_map_new = np.unique(corpDF['word'])
-	reverse_vocab_map = dict(zip(vocab_map_new.tolist(), range(len(vocab_map_new))))
-
-	corpDF['V'] = [reverse_vocab_map[x] for x in corpDF['word']]
-
-	V_new = np.array(corpDF['V']).astype('uint16') 
-	D_new = np.array(corpDF['D']).astype('uint16') 	
-	C_new = np.array(corpDF['C']).astype('uint8') 	
-	K_new = np.array(corpDF['K']).astype('uint8') 	
-
-	return(V_new, D_new, K_new, C_new, vocab_map_new.tolist())	
-
-def filterAcrossChildren(V, D, K, C, vocab_map, n):
-    '''remove types with more than n% of their probability mass from a single child. 
-    This helps to identify things like names, places, and recording conventions'''
-    corpDF = pandas.DataFrame({'V':V,'D':D,'K':K,'C':C, 'order':range(len(V))})    
-    print('original dims: '+'*'.join([str(x) for x in corpDF.shape]))
-    
-    if (n > 1 or n < 0):
-        raise ValueError('n must be between 0 and 1')
-    
-    child_vocab_frequency = np.zeros([len(np.unique(K)), len(np.unique(V))])
-    print(child_vocab_frequency.shape)
-    for i in range(len(K)):
-        child_vocab_frequency[K[i], V[i]] += 1 
-    
-    # find words with more than n% of the probability mass belonging to a single child (n=90)?
-    child_vocab_probs = child_vocab_frequency/child_vocab_frequency.sum(axis=0)[None,:]
-    child_vocab_probs_max = child_vocab_probs.max(axis=0)
-
-    cvp_df = pandas.DataFrame({'index':range(len(vocab_map)),'word':vocab_map,'prob':child_vocab_probs_max})
-    to_remove = cvp_df[cvp_df.prob > n]
-    to_keep = cvp_df[cvp_df.prob <= n]
-    print('Removed '+str(to_remove.shape[0])+' words: '+' '.join(to_remove.word))
-    
-    corpDF_short = corpDF.merge(to_keep[['index','prob','word']], left_on='V', right_on='index').sort_values(by='order')
-    print('filtered dims: '+'*'.join([str(x) for x in corpDF_short.shape]))
-    
-    vocab_map_new = np.unique(corpDF_short['word'])
-    reverse_vocab_map = dict(zip(vocab_map_new.tolist(), range(len(vocab_map_new))))
-
-    corpDF_short['V'] = [reverse_vocab_map[x] for x in corpDF_short['word']]
-    V_new = np.array(corpDF_short['V']).astype('uint16') 
-    D_new = np.array(corpDF_short['D']).astype('uint16') 	
-    C_new = np.array(corpDF_short['C']).astype('uint8') 	
-    K_new = np.array(corpDF_short['K']).astype('uint8') 	
-    
-    return(V_new, D_new, K_new, C_new, vocab_map_new.tolist())	
-
-
 class ParallelLDA():
 	def __init__(self, V,D, vocab_map, params, instances):
 
@@ -430,7 +312,6 @@ class ParallelLDA():
 
 		# file_hash = hashlib.sha256(run_params).hexdigest()
 		# file_path = os.path.join(self.params['cache_dir'],file_hash+'.pickle')			
-		# return(file_path)
-
+		# return(file_path)	
 
 
