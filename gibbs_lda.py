@@ -10,12 +10,12 @@ class LDA():
 		self.V = V 
 		self.D = D		
 		self.vocab_map = vocab_map
-		self.params = params		
+		self.params = params
 
-		if self.params['lda_k'] > 65535:
-			raise ValueError('Limit to 65,535 topics to allow for unsigned 16-bit representations of topic assignments')
+		if self.params['lda_k'] > 255:
+			raise ValueError('Limit to 255 topics to allow for unsigned 8-bit representations of topic assignments')
 
-		self.Z = np.random.randint(0,self.params['lda_k'], len(self.V)).astype('uint16')
+		self.Z = np.random.randint(0,self.params['lda_k'], len(self.V)).astype('uint8')
 
 		#setup the sampling	table			
 		self.ZZ = None		
@@ -191,9 +191,9 @@ def fast_lda(iterations,Z,D,V,topicTypeCounts,topicCounts,topicDocCounts,docCoun
 	likelihoodSampleRate = 100
 	LL = np.zeros((iterations/likelihoodSampleRate), dtype=np.float32)
 	if sample:
-		ZZ = np.zeros((iterations/thinning, len(Z)),dtype=np.uint16)		
+		ZZ = np.zeros((iterations/thinning, len(Z)),dtype=np.uint8)		
 	else:
-		ZZ = np.zeros((1, len(Z)), dtype=np.uint16)	
+		ZZ = np.zeros((1, len(Z)), dtype=np.uint8)	
 
 			
 
@@ -231,9 +231,9 @@ def fast_lda(iterations,Z,D,V,topicTypeCounts,topicCounts,topicDocCounts,docCoun
 			normalizedP = topicP / np.sum(topicP) # normalize										
 			rs = np.random.random_sample()			
 			cumulativeTopicProb = np.cumsum(normalizedP)
-			newTopic = np.uint16(0)			
+			newTopic = np.uint8(0)			
 			while rs > cumulativeTopicProb[newTopic]: 
-				newTopic += np.uint16(1)			
+				newTopic += np.uint8(1)			
 
 			Z[w] = newTopic
 			L[w] = np.log(normalizedP[newTopic])
@@ -333,7 +333,7 @@ class authorLDA():
 		if self.params['lda_k'] > 255:
 			raise ValueError('Limit to 255 topics to allow for unsigned 8-bit representations of topic assignments')
 		
-		self.Z = np.random.randint(0,self.params['lda_k'], len(self.V)).astype('uint16')
+		self.Z = np.random.randint(0,self.params['lda_k'], len(self.V)).astype('uint8')
 
 		#setup the sampling	table			
 		self.ZZ = None		
@@ -351,7 +351,7 @@ class authorLDA():
 			if A > 255:
 				raise ValueError('Limit to 255 authors to allow for unsigned 8-bit representations of topic assignments')
 			#A is the number of authors, to be learned
-			self.A = np.random.randint(0,A, len(self.V)).astype('uint16')
+			self.A = np.random.randint(0,A, len(self.V)).astype('uint8')
 			self.authorType = 'learned'
 			print('Learning author assignments for '+str(len(np.unique(self.A)))+' authors')
 		else:
@@ -557,9 +557,9 @@ def fast_author_lda(iterations,A,Z,D,V, topicTypeCounts, topicAuthorCounts, lda_
 
 	#initialize return variable	
 	if sample:
-		ZZ = np.zeros((iterations/thinning, len(Z)),dtype=np.uint16)
+		ZZ = np.zeros((iterations/thinning, len(Z)),dtype=np.uint8)
 	else:
-		ZZ = np.zeros((1, len(Z)), dtype=np.uint16)	
+		ZZ = np.zeros((1, len(Z)), dtype=np.uint8)	
 	
 	likelihoodSampleRate = 10
 	LL = np.zeros((iterations/likelihoodSampleRate), dtype=np.float32)		
@@ -594,9 +594,9 @@ def fast_author_lda(iterations,A,Z,D,V, topicTypeCounts, topicAuthorCounts, lda_
 			normalizedP = topicP / np.sum(topicP) # normalize										
 			rs = np.random.random_sample()			
 			cumulativeTopicProb = np.cumsum(normalizedP)
-			newTopic = np.uint16(0)			
+			newTopic = np.uint8(0)			
 			while rs > cumulativeTopicProb[newTopic]: 
-				newTopic += np.uint16(1)			
+				newTopic += np.uint8(1)			
 
 			Z[w] = newTopic
 			L[w] = np.log(normalizedP[newTopic])
