@@ -47,16 +47,17 @@ class LDA():
 
 		self.Z = ZZ[-1,:] #new Z is the final line of ZZ, regardless of the number of samples in ZZ		
 		
+		# do a sanity check on the new Z against topicTypeCounts and topicDocCounts to confirm that the bookkeeping is consistent. Thinning means that the final sample in ZZ is not consistent with the bookkeeping variables.		
+
+		if not (topicTypeCounts == np.vstack([augmentedBincount(self.Z[self.V == i], self.params['lda_k']).astype('uint32') for i in range(np.max(self.V)+1)]).T).all():				
+				raise ValueError("Bookkeeping variable topicTypeCounts is inconsistent with final topic assignments")
+
+		if not (topicDocCounts ==  np.vstack([augmentedBincount(self.Z[self.D == i], self.params['lda_k']).astype('uint32') for i in range(np.max(self.D)+1)]).T).all():
+				raise ValueError("Bookkeeping variable topicDocCounts is inconsistent with final topic assignments")
 
 		if sample:
 			self.ZZ = ZZ
-		else:
-			# do a sanity check on the new Z against topicTypeCounts and topicDocCounts to confirm that the bookkeeping is consistent. Thinning means that the final sample in ZZ is not consistent with the bookkeeping variables.				
-			if not (topicTypeCounts == np.vstack([augmentedBincount(self.Z[self.V == i], self.params['lda_k']).astype('uint32') for i in range(np.max(self.V)+1)]).T).all():			
-				raise ValueError("Bookkeeping variable topicTypeCounts is inconsistent with final topic assignments")
-
-			if not (topicDocCounts ==  np.vstack([augmentedBincount(self.Z[self.D == i], self.params['lda_k']).astype('uint32') for i in range(np.max(self.D)+1)]).T).all():
-				raise ValueError("Bookkeeping variable topicDocCounts is inconsistent with final topic assignments")
+		
 
 		if hasattr(self, 'LL'):
 			self.LL = np.hstack([self.LL, LL]) 
@@ -136,7 +137,7 @@ class LDA():
 
 
 	def get_cache_signature(self) :	
-		'''check if this set of parameters has been run before. Only checks uniqueness of params, not V or D'''
+		'''check if this set of parameters has been run before. !!! Only checks uniqueness of params, not V or D'''
 
 		# jsonify the LDA parameters
 		lda_keys  = [x for x in self.params.keys() if x.startswith('lda')]
@@ -245,16 +246,18 @@ def fast_lda(iterations,Z,D,V,topicTypeCounts,topicCounts,topicDocCounts,docCoun
 			docCounts[currentDocument] += 1			
 
 		#store Z depending on thinning and sampling
-		if sample and (i % thinning == 0):						
-			ZZ[i/thinning,:] = Z
-			#print(111111)			
-		else:
+		if sample:
+			if ((i+1) % thinning == 0):	#  +1 for proper mod behavior				
+				ZZ[i/thinning,:] = Z
+				#print(111111) # taking a sample			
+		else: 
+			#print(222222) # updating Z, no sample
 			ZZ[0,:] = Z	
-			#print(222222)		
+			
 		if i % likelihoodSampleRate == 0:
 			LL[i/likelihoodSampleRate] = np.sum(L)	
 
-	
+	#print(333333) # done 				
 	return(ZZ, LL, topicTypeCounts, topicDocCounts)			
 
 def augmentedBincount(vector, max):
@@ -339,6 +342,7 @@ class authorLDA():
 		self.ZZ = None		
 		
 		#### Author LDA code 
+		#!!! this section looks sketchy
 		if len(A) == len(D) > 1:
 			#A is a vector of veridical author labels
 			self.A = A
@@ -414,12 +418,10 @@ class authorLDA():
 			# do a sanity check on the new Z against topicTypeCounts and topicDocCounts to confirm that the bookkeeping is consistent. Thinning means that the final sample in ZZ is not consistent with the bookkeeping variables.	
 			topicTypeCountsCheck = np.vstack([augmentedBincount(self.Z[self.V == i], self.params['lda_k']).astype('uint32') for i in range(np.max(self.V)+1)]).T
 			if not (topicTypeCounts == topicTypeCountsCheck).all():
-				pdb.set_trace()
 				raise ValueError("Bookkeeping variable topicTypeCounts is inconsistent with final topic assignments")
 
 			topicAuthorCountsCheck = np.vstack([augmentedBincount(self.Z[self.A == i], self.params['lda_k']).astype('uint32') for i in range(np.max(self.A)+1)]).T
 			if not (topicAuthorCounts == topicAuthorCountsCheck).all():
-				pdb.set_trace()
 				raise ValueError("Bookkeeping variable topicAuthorCounts is inconsistent with final topic assignments")
 
 		if hasattr(self, 'LL'):
